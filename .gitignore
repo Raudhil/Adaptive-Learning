@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.data/
+.tmp/
+.env*
+!.env.example
+*.tsbuildinfo
+output/
+playwright-report/
+test-results/
+__pycache__/
+*.pyc

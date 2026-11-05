@@ -1,0 +1,20 @@
+export type Role = "student" | "lecturer" | "admin" | "researcher";
+export type Module = "HTML" | "CSS" | "JavaScript" | "React";
+export type Level = "pemula" | "menengah" | "mahir";
+export type Code = { html: string; css: string; js: string };
+export type User = { id: string; email: string; name: string; role: Role; consent_at: string | null; created_at: string };
+export type KC = { id: string; code: string; name: string; module: Module; position: number; prerequisites: { id: string; weight: number }[] };
+export type TestCase = { id: string; description: string; script: string; timeout_ms: number };
+export type Exercise = { id: string; title: string; instructions: string; starter_code: Code; difficulty: number; hints: string[]; kcs: { id: string; weight: number }[]; tests: TestCase[] };
+export type BKTParams = { initial: number; learn: number; guess: number; slip: number };
+export type TrainingRow = { id: string; features: number[]; label: Level; pilot_label_id?: string };
+export type FallbackThresholds = { intermediate: number; advanced: number };
+export type DatasetProvenance = { source: "pilot" | "manual"; kind: "real" | "simulation" | "unverified"; rubricVersions: string[] };
+export type ModelConfig = {
+  bkt: BKTParams; bktByKc: Record<string, BKTParams>; initialByLevel: Record<Level, number>;
+  masteryThreshold: number; readinessThreshold: number; targetCorrect: number;
+  bnLeak: number; bnRoot: number; k: number; minTraining: number; training: TrainingRow[];
+  fallbackThresholds?: FallbackThresholds; dataset?: DatasetProvenance;
+  recentSessions: number; failureThreshold: number; inactiveDays: number;
+};
+export type TestResult = { id: string; passed: boolean; error?: string };
