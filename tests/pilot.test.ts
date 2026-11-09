@@ -12,7 +12,7 @@ import { defaultConfig,PRETEST_INSTRUMENT_VERSION } from "../src/lib/seed-data";
 import type { User } from "../src/lib/types";
 
 test("fallback thresholds are configurable, backward compatible, and ordered",()=>{
- const features=[.5,.5,.5,.5,10,10,10,10,3,50];
+ const features=[.5,.5,.5,10,10,10,3,50];
  assert.equal(classify(features,[],3,15).label,"menengah");
  assert.equal(classify(features,[],3,15,{intermediate:.6,advanced:.9}).label,"pemula");
  assert.equal(configSchema.safeParse({...defaultConfig,fallbackThresholds:{intermediate:.8,advanced:.4}}).success,false);
@@ -29,7 +29,7 @@ test("pilot provenance: approved rubrics, owner access, cohort isolation, immuta
   for(const [courseId,purpose,kind,userId] of [["real-class","pilot","real","real"],["sim-class","pilot","simulation","sim"],["exp-class","experiment","real","experiment"]]){
    await db.query("INSERT INTO classes(id,name,lecturer_id,join_code,mode,purpose,data_kind) VALUES($1,$1,'teacher',$1,'adaptive',$2,$3)",[courseId,purpose,kind]);
    await db.query("INSERT INTO enrollments(user_id,class_id) VALUES($1,$2)",[userId,courseId]);
-   await db.query("INSERT INTO pretest_results(user_id,features,answers,knn_label,neighbors,model_version,method,instrument_version) VALUES($1,$2,'{}','mahir','[]','test','score-fallback',$3)",[userId,json({raw:[.5,.5,.5,.5,10,10,10,10,3,50]}),PRETEST_INSTRUMENT_VERSION]);
+   await db.query("INSERT INTO pretest_results(user_id,features,answers,knn_label,neighbors,model_version,method,instrument_version) VALUES($1,$2,'{}','mahir','[]','test','score-fallback',$3)",[userId,json({raw:[.5,.5,.5,10,10,10,3,50]}),PRETEST_INSTRUMENT_VERSION]);
   }
   const criteria={pemula:"Kriteria pemula dari ahli",menengah:"Kriteria menengah dari ahli",mahir:"Kriteria mahir dari ahli"};
   await db.query("INSERT INTO pilot_rubrics(version,title,criteria,created_by) VALUES('draft-v1','Rubrik draft',$1,'teacher')",[json(criteria)]);
@@ -49,7 +49,7 @@ test("pilot provenance: approved rubrics, owner access, cohort isolation, immuta
   assert.equal((await db.query("SELECT count(*)::int AS n FROM pilot_labels WHERE user_id='real'")).rows[0].n,2);
   assert.deepEqual(await transaction(tx=>validateTraining(real.training,tx)),{source:"pilot",kind:"real",rubricVersions:["approved-v1"]});
   await assert.rejects(()=>transaction(tx=>validateTraining([...real.training,...sim.training],tx)),/simulasi dan data nyata/);
-  await assert.rejects(()=>transaction(tx=>validateTraining([{...real.training[0],features:new Array(10).fill(0)}],tx)),/fitur\/label tidak sesuai/);
+  await assert.rejects(()=>transaction(tx=>validateTraining([{...real.training[0],features:new Array(8).fill(0)}],tx)),/fitur\/label tidak sesuai/);
   await assert.rejects(()=>transaction(tx=>validateTraining([...real.training,{...real.training[0],id:first.id,pilot_label_id:first.id,label:"pemula"}],tx)),/Satu peserta/);
   await db.query("UPDATE users SET consent_at=null WHERE id='real'");
   assert.equal((await pilotDataset("real")).training.length,0);

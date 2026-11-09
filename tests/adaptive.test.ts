@@ -16,17 +16,17 @@ test("BKT: manual correct, incorrect, prediction and fractional weighting",()=>{
  assert.ok(updateBKT(.2,true,params,.5)<updateBKT(.2,true,params));
 });
 test("KNN: fallback, fixed normalization, nearest distances, zero-distance vote",()=>{
- assert.equal(classify([.9,.9,.9,.9,100,100,100,100,3,70],[],3,15).label,"mahir");
- assert.equal(normalize([1,0,0,0,1800,0,0,0,5,100])[4],1);
+ assert.equal(classify([.9,.9,.9,100,100,100,3,70],[],3,15).label,"mahir");
+ assert.equal(normalize([1,0,0,1800,0,0,5,100])[3],1);
  assert.throws(()=>normalize([1]));
- const features=[.2,.2,.2,.2,20,20,20,20,2,50];
- const training:TrainingRow[]=[{id:"a",features,label:"pemula"},{id:"b",features:features.map((x,i)=>i<4?1:x),label:"mahir"},{id:"c",features:features.map((x,i)=>i<4?.5:x),label:"menengah"}];
+ const features=[.2,.2,.2,20,20,20,2,50];
+ const training:TrainingRow[]=[{id:"a",features,label:"pemula"},{id:"b",features:features.map((x,i)=>i<3?1:x),label:"mahir"},{id:"c",features:features.map((x,i)=>i<3?.5:x),label:"menengah"}];
  const result=classify(features,training,3,3);
  assert.equal(result.label,"pemula");assert.equal(result.neighbors[0].distance,0);
  assert.deepEqual(result,classify(features,training,3,3));
 });
 test("KNN stratified CV is deterministic and includes confusion + per-class metrics",()=>{
- const rows:TrainingRow[]=Array.from({length:30},(_,i)=>({id:String(i).padStart(2,"0"),features:[...new Array(4).fill(Math.floor(i/10)/2),100,100,100,100,3,50],label:(["pemula","menengah","mahir"] as const)[Math.floor(i/10)]}));
+ const rows:TrainingRow[]=Array.from({length:30},(_,i)=>({id:String(i).padStart(2,"0"),features:[...new Array(3).fill(Math.floor(i/10)/2),100,100,100,3,50],label:(["pemula","menengah","mahir"] as const)[Math.floor(i/10)]}));
  const r=selectK(rows);assert.equal(r.selectedK,3);assert.equal(r.reports[0].accuracy,1);assert.equal(r.reports[0].perClass[0].f1,1);assert.deepEqual(r,selectK([...rows].reverse()));
 });
 const graph:KC[]=[{id:"A",code:"A",name:"A",module:"HTML",position:0,prerequisites:[]},{id:"B",code:"B",name:"B",module:"HTML",position:1,prerequisites:[{id:"A",weight:.9}]}];
@@ -47,8 +47,8 @@ test("Joint readiness retains correlation between prerequisites",()=>{
 test("Recommendation respects control sequence, first-observation availability and determinism",()=>{
  const mastery=Object.fromEntries(seedKCs.map(k=>[k.id,.2])),inference=inferReadiness(seedKCs,mastery,defaultConfig);
  const input={nodes:seedKCs,exercises:seedExercises,mastery,...inference,config:defaultConfig,mode:"adaptive" as const,recent:[],attempted:[],failures:{}};
- const r=recommend(input);assert.equal(r.kc_id,"H1");assert.deepEqual(r,recommend(input));
- const control=recommend({...input,mode:"control",attempted:["ex-h1-1"]});assert.equal(control.exercise_id,"ex-h1-2");
+ const r=recommend(input);assert.equal(r.kc_id,"H01");assert.deepEqual(r,recommend(input));
+ const control=recommend({...input,mode:"control",attempted:["simpus-h01-1-v1"]});assert.equal(control.exercise_id,"simpus-h01-2-v1");
  const next=recommend({...input,recent:[r.exercise_id!],attempted:[r.exercise_id!]});assert.notEqual(next.exercise_id,r.exercise_id);
 });
 test("JS budget interrupts while loops and recursive callbacks",()=>{

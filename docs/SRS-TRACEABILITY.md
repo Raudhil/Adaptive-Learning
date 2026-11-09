@@ -1,8 +1,10 @@
 # Ketertelusuran implementasi SRS 0.1
 
+> Pembaruan 9 November 2026: katalog utama sudah menjadi 25 KC SIMPUS-Mini, 50 materi, 75 latihan (66 otomatis; C07-C09 praktik tanpa BKT). Pretest 25 soal HTML/CSS/JS menggunakan 8 fitur dan instrumen simpus-mcq-v2. React tetap di arsip. Daftar di bawah perlu dibaca bersama [laporan implementasi KC25](kc25-implementation-report.md), terutama perubahan cakupan Bagian 3/4.1 SRS dan evaluator H01. SRS PDF asli belum ditulis ulang/disahkan.
+
 Sumber: `D:\Kuliah\Skripsi\SRS.pdf`, 16 halaman, dokumen 22 Oktober 2026. Status “tersedia” berarti kode/alur lokal tersedia; tidak menyatakan instrumen sudah divalidasi atau siap produksi.
 
-Panduan operasional: [Panduan Penggunaan](PANDUAN-PENGGUNAAN.md). SRS bagian 10.2 merencanakan evaluasi pretest-posttest; aplikasi saat ini belum memiliki posttest, rekap pretest-posttest, atau input nilai manual dosen. FR-15-16 memakai penilaian otomatis test case. Label awal FR-08 disimpan untuk audit tetapi belum ditampilkan pada dasbor mahasiswa/dosen. FR-05 dijalankan setelah gabung kelas, sebelum pengiriman latihan pertama.
+Panduan operasional: [Panduan Penggunaan](PANDUAN-PENGGUNAAN.md). SRS bagian 10.2 merencanakan evaluasi pretest-posttest; aplikasi saat ini belum memiliki posttest, rekap pretest-posttest, atau input nilai manual dosen. FR-15-16 memakai penilaian otomatis test case. Label awal FR-08 disimpan untuk audit dan ditampilkan pada profil awal. FR-05 dijalankan setelah gabung kelas, sebelum pengiriman latihan pertama.
 
 | ID | Implementasi | Status / verifikasi |
 |---|---|---|
@@ -10,8 +12,8 @@ Panduan operasional: [Panduan Penggunaan](PANDUAN-PENGGUNAAN.md). SRS bagian 10.
 | FR-02 | Empat role, pemeriksaan halaman dan API | Tersedia, HTTP RBAC diperiksa. |
 | FR-03 | Consent opsional, waktu persetujuan, penarikan, filter ekspor | Tersedia, ekspor sebelum/setelah penarikan diuji. Form etik final memerlukan institusi. |
 | FR-04 | Dosen membuat kelas adaptif/kontrol dan kode gabung | Tersedia; HTTP create/join diperiksa. |
-| FR-05 | Pretest 4 modul + pengalaman/nilai prasyarat opsional | Tersedia; satu kali per siswa, latihan dibatasi sebelum pretest. |
-| FR-06 | 10 fitur, min-max bounds tetap, weighted Euclidean KNN | Tersedia, hitungan/fallback diuji; data nyata belum tersedia. |
+| FR-05 | Pretest 3 modul + pengalaman/nilai prasyarat opsional | Tersedia; satu kali per siswa, latihan dibatasi sebelum pretest. |
+| FR-06 | 8 fitur, min-max bounds tetap, weighted Euclidean KNN | Tersedia, hitungan/fallback diuji; data nyata belum tersedia. |
 | FR-07 | Klasifikasi global → initialByLevel seluruh KC | Tersedia; inisialisasi diuji. Level per modul bukan versi minimum ini. |
 | FR-08 | Label, metode, jarak/tetangga, versi dalam pretest_results | Tersedia. |
 | FR-09 | Data training pada admin, stratified CV k ganjil, confusion/P/R/F1 | Tersedia; CV sintetis diuji, aktivasi eksplisit lewat versi baru. |
@@ -19,8 +21,8 @@ Panduan operasional: [Panduan Penggunaan](PANDUAN-PENGGUNAAN.md). SRS bagian 10.
 | FR-11 | srcDoc iframe opaque origin, debounce 400 ms | Kode tersedia; target render lintas browser belum diukur. |
 | FR-12 | Console/error postMessage dengan source/origin/channel | Kode tersedia; QA browser belum selesai. |
 | FR-13 | Draft DB + localStorage bernamespace user/latihan | API simpan/pulih diperiksa, QA keyboard/browser belum selesai. |
-| FR-14 (C) | Editor JSX/React | Ditunda; materi React tersedia. |
-| FR-15 | Instruksi, kode awal, tingkat kesulitan, Q-matrix, tests | 51 latihan pilot pada 17 KC; CRUD tersedia. |
+| FR-14 (C) | Editor JSX/React | Ditunda; materi React lama diarsipkan. |
+| FR-15 | Instruksi, kode awal, tingkat kesulitan, Q-matrix, tests | 75 latihan pada 25 KC, 66 dapat dinilai otomatis; CRUD tersedia. |
 | FR-16 | Harness DOM/JS, hasil per tes, Worker JS murni | Kode tersedia; DOM runtime/browser belum diverifikasi, lihat NFR-07. |
 | FR-17 | Attempt kode/hasil/hint/waktu/first/selection/snapshot model | API dan penyimpanan diuji. Hasil tes dilaporkan klien. |
 | FR-18 | Hint 3 tingkat, jumlah server-side | Tersedia; API diuji. |

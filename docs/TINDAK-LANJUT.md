@@ -1,8 +1,10 @@
 # Yang perlu dilakukan pemilik proyek
 
+> Status terbaru: lihat [laporan implementasi KC25](kc25-implementation-report.md). Instrumen lama disimpan sebagai arsip; C07-C09 masih praktik tanpa penilaian otomatis.
+
 1. **Siapkan akses awal:** mahasiswa dan dosen dapat mendaftar lewat halaman register dengan pilihan peran. Buat akun admin/peneliti dengan `npm.cmd run account:create`; dosen membuat kelas dan membagikan kode. Tidak ada akun bawaan atau kredensial yang ditentukan agen. Lihat [panduan penggunaan](PANDUAN-PENGGUNAAN.md) untuk urutan klik.
 2. **Lengkapi `.env.local`:** domain email kampus dan kunci `RESEARCH_SECRET` acak minimal 32 karakter. Untuk deployment: PostgreSQL terpisah, URL HTTPS, kebijakan backup, dan lokasi server sesuai kebijakan institusi. Akun dan data lokal PGlite tidak otomatis dipindahkan ke PostgreSQL.
-3. **Validasi konten dengan dosen:** peta 20 KC, prasyarat, bobot noisy-AND, materi, pretest, hint, dan test case. Latihan penguatan yang disediakan bukan instrumen yang tervalidasi; tambah latihan independen terutama setelah percobaan pertama gagal karena mengulang latihan yang sama tidak memperbarui BKT.
+3. **Validasi konten dengan dosen:** peta 25 KC aktif SIMPUS-Mini, prasyarat, bobot noisy-AND, materi, pretest, hint, dan test case. Latihan penguatan yang disediakan bukan instrumen yang tervalidasi; tambah latihan independen terutama setelah percobaan pertama gagal karena mengulang latihan yang sama tidak memperbarui BKT.
 4. **Tentukan parameter kosong SRS:** k dan minimum data KNN; P(L0) per level/KC; learn/guess/slip per KC; CPT/leak; readiness threshold; target peluang benar; jumlah sesi anti-pengulangan; ambang kegagalan dan hari tidak aktif. Nilai pilot tersedia di halaman admin dan dapat diganti tanpa deploy.
 5. **Kumpulkan data pilot berizin:** satu baris per siswa untuk KNN, label ahli, dan log observasi pertama untuk BKT. Jalankan CV/kalibrasi dengan split peserta, catat versi, lalu evaluasi pada peserta berbeda. Jangan menggunakan label prediksi KNN sebagai ground truth pelatihan ulang.
 6. **Lengkapi persetujuan penelitian:** nama peneliti/penanggung jawab, kontak, tujuan rinci, masa retensi, hak penarikan/penghapusan, lokasi penyimpanan, serta persetujuan etik jika diperlukan. Form saat ini menjelaskan jenis data dan pilihan consent, tetapi belum menggantikan formulir etik institusi.

@@ -91,3 +91,41 @@ CREATE TABLE IF NOT EXISTS pilot_labels (
  rationale text NOT NULL, created_by text NOT NULL REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS pilot_labels_user_history ON pilot_labels(user_id,created_at DESC);
+
+-- Additive curriculum migration: legacy rows and all learner evidence remain intact.
+CREATE TABLE IF NOT EXISTS curriculum_versions (
+ version text PRIMARY KEY, title text NOT NULL, instrument_version text NOT NULL,
+ active boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS curriculum_one_active ON curriculum_versions(active) WHERE active;
+INSERT INTO curriculum_versions(version,title,instrument_version)
+ VALUES('legacy-srs-v1','SRS awal: HTML/CSS/JS/React','mcq-pilot-v1') ON CONFLICT DO NOTHING;
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS curriculum_version text NOT NULL DEFAULT 'legacy-srs-v1';
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS weight_reason text NOT NULL DEFAULT '';
+ALTER TABLE pilot_labels ADD COLUMN IF NOT EXISTS instrument_version text NOT NULL DEFAULT 'legacy-unknown';
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '';
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS importance_weight int NOT NULL DEFAULT 1 CHECK(importance_weight BETWEEN 1 AND 5);
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS difficulty_level text NOT NULL DEFAULT 'Beginner' CHECK(difficulty_level IN ('Beginner','Intermediate','Advanced'));
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS sources jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS external_prerequisites jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS assessment_ready boolean NOT NULL DEFAULT true;
+ALTER TABLE knowledge_components ADD COLUMN IF NOT EXISTS assessment_note text NOT NULL DEFAULT '';
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS curriculum_version text NOT NULL DEFAULT 'legacy-srs-v1';
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS evaluator text NOT NULL DEFAULT 'dom' CHECK(evaluator IN ('dom','js','source'));
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS assessment_ready boolean NOT NULL DEFAULT true;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS assessment_note text NOT NULL DEFAULT '';
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS sources jsonb NOT NULL DEFAULT '[]';
+CREATE TABLE IF NOT EXISTS kc_version_mapping (
+ old_kc_id text NOT NULL REFERENCES knowledge_components(id), new_kc_id text NOT NULL REFERENCES knowledge_components(id),
+ curriculum_version text NOT NULL REFERENCES curriculum_versions(version),
+ relation text NOT NULL DEFAULT 'review-required', PRIMARY KEY(old_kc_id,new_kc_id,curriculum_version)
+);
+-- Only the uniqueness definition changes. No pretest row is deleted or overwritten.
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='pretest_results'::regclass AND contype='p' AND array_length(conkey,1)=1) THEN
+  ALTER TABLE pretest_results DROP CONSTRAINT pretest_results_pkey;
+  ALTER TABLE pretest_results ADD PRIMARY KEY(user_id,instrument_version);
+ END IF;
+END $$;
+CREATE OR REPLACE VIEW current_pretests AS
+ SELECT * FROM pretest_results WHERE instrument_version='simpus-mcq-v2';

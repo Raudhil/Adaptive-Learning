@@ -7,8 +7,9 @@ export type RecommendationInput = {
   recent: string[]; attempted: string[]; failures: Record<string,number>;
 };
 export function recommend(input: RecommendationInput) {
-  const {nodes,exercises,mastery,readiness,posterior,config,mode,recent,attempted,failures}=input;
-  const ordered=[...nodes].sort((a,b)=>a.position-b.position||(mastery[a.id]??0)-(mastery[b.id]??0)||a.id.localeCompare(b.id));
+  const {nodes,exercises:catalog,mastery,readiness,posterior,config,mode,recent,attempted,failures}=input;
+  const exercises=catalog.filter(e=>e.assessment_ready!==false&&e.kcs.every(k=>nodes.some(n=>n.id===k.id&&n.assessment_ready!==false)));
+ const ordered=[...nodes].sort((a,b)=>a.position-b.position||(mastery[a.id]??0)-(mastery[b.id]??0)||a.id.localeCompare(b.id));
   let target: KC|undefined, remedial=false;
   if (mode==="control") target=ordered.find(k=>exercises.some(e=>e.kcs.some(x=>x.id===k.id)&&!attempted.includes(e.id)));
   else {

@@ -1,5 +1,7 @@
 # Panduan Penggunaan Live Code Adaptif
 
+> Pembaruan KC25 (9 November 2026): katalog utama 25 KC HTML/CSS/JS; pretest baru 25 soal, tiga modul dan delapan fitur. C07-C09 hanya praktik tanpa pembaruan BKT. Pengguna lama perlu pretest versi baru; data terdahulu dapat dibuka melalui tautan Riwayat kurikulum lama pada dasbor. Detail angka/tangkapan lama di bawah belum seluruhnya direvisi; gunakan [laporan implementasi KC25](kc25-implementation-report.md) sebagai status terbaru.
+
 Petunjuk untuk dosen, mahasiswa, dan pemilik proyek. Diperiksa pada 4 November 2026 berdasarkan kode aplikasi dan SRS draf 0.1, 22 Oktober 2026.
 
 ## 1. Pahami alurnya dahulu

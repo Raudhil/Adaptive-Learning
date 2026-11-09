@@ -2,11 +2,21 @@
 
 Implementasi lokal SRS draf 0.1 (22 Oktober 2026). Next.js App Router + TypeScript, CodeMirror 6, PostgreSQL, KNN, BKT, dan Bayesian Network. Antarmuka Bahasa Indonesia; empat peran: mahasiswa, dosen, admin, peneliti.
 
+## Kurikulum aktif: SIMPUS-Mini (9 November 2026)
+
+25 KC H01-H05, C01-C09, J01-J11 memakai sumber dosen di `KC/`. Tersedia 50 materi dan 75 latihan independen (3 per KC); 66 latihan dinilai otomatis. C07-C09 masih praktik tanpa penilaian/BKT karena evaluator multi-viewport belum tersedia. H01 memakai pemeriksaan sumber asli, bukan metadata wrapper preview.
+
+Pretest versi `simpus-mcq-v2` berisi 25 MCQ pada 3 modul dengan 8 fitur KNN. Data latih/instrumen lama tidak dipakai; tidak ada data pilot buatan. Pengguna lama mengerjakan pretest baru, sedangkan hasil lama tetap tersedia di `/history`. React/Next.js diarsipkan di luar jalur utama; keputusan ini perlu dicatat dalam revisi SRS.
+
+Rincian perubahan, bukti uji, pemetaan ID dan batas hasil: [Laporan implementasi KC25](docs/kc25-implementation-report.md). Proposal awal tetap tersedia sebagai dokumen desain historis.
+
+Untuk database PGlite yang sudah berisi data, hentikan aplikasi lalu jalankan `npm.cmd run db:migrate:kc25`. Skrip membuat backup dan memeriksa hash riwayat sebelum/sesudah transaksi. `db:seed` menginstal versi aktif secara aditif/idempoten; jangan menjalankan skrip database bersamaan dengan server PGlite.
+
 ## Panduan penggunaan
 
 Baca [Panduan Penggunaan untuk Dosen dan Mahasiswa](docs/PANDUAN-PENGGUNAAN.md) untuk urutan klik, letak pretest, cara menentukan level awal, membaca progres, serta mencocokkan fitur dengan SRS. Versi cetak tersedia di [PDF panduan](output/pdf/panduan-penggunaan-live-code.pdf) setelah dibuat di workspace ini; folder `output/` tidak dilacak Git.
 
-**Alur saat ini:** dosen membuat kelas → mahasiswa bergabung → **Asesmen awal (pretest)** → profil awal → materi/latihan → **Jalankan tes & kirim** → penguasaan diperbarui → dosen melihat heatmap. **Posttest, input nilai manual dosen, dan rekap nilai akhir belum tersedia.** Label pemula/menengah/mahir tersimpan tetapi belum tampil di dasbor; persentase penguasaan bukan nilai ujian.
+**Alur saat ini:** dosen membuat kelas → mahasiswa bergabung → **Asesmen awal (pretest)** → profil awal → materi/latihan → **Jalankan tes & kirim** → penguasaan diperbarui → dosen melihat heatmap. **Posttest, input nilai manual dosen, dan rekap nilai akhir belum tersedia.** Label pemula/menengah/mahir tersimpan dan ditampilkan di profil awal; persentase penguasaan bukan nilai ujian.
 
 ## Menjalankan di Windows / PowerShell
 
@@ -42,9 +52,9 @@ Alur awal: dosen membuat kelas → membagikan kode → mahasiswa mendaftar dan b
 
 - Login email/password bcrypt, cookie httpOnly, CSRF Origin + header, pembatasan percobaan login, dan otorisasi API per peran.
 - Kelas adaptif atau kontrol; satu mahasiswa satu kelas eksperimen agar kelompok tidak tercampur.
-- Pretest empat modul + profil pengalaman, normalisasi 10 fitur, weighted KNN atau fallback skor, audit tetangga, dan CV k ganjil melalui admin.
+- Pretest tiga modul + profil pengalaman, normalisasi 8 fitur, weighted KNN atau fallback skor, audit tetangga, dan CV k ganjil melalui admin.
 - Editor HTML/CSS/JS, autocomplete, pratinjau debounce 400 ms, konsol, draft server dan pemulihan lokal, hint bertingkat, tes DOM/JS.
-- 20 KC sesuai SRS, materi awal, 51 latihan pilot pada 17 KC HTML/CSS/JS. Tiga latihan per KC adalah latihan penguatan, **bukan tiga instrumen penelitian yang telah divalidasi**. React/Next.js berisi materi; editor JSX (FR-14, prioritas C) belum dibuat.
+- 25 KC sesuai kurikulum dosen, 50 materi bersumber, 75 latihan independen pada HTML/CSS/JS. 22 KC siap penilaian otomatis; C07-C09 praktik saja. Instrumen tetap memerlukan validasi ahli/pilot. Katalog React lama dan riwayat disimpan, tidak menjadi jalur utama.
 - BKT hanya observasi pertama tiap latihan; hint penuh menghasilkan observasi salah. Riwayat menyimpan versi parameter. Bobot Q-matrix memakai fractional likelihood; perlu disepakati dalam metodologi.
 - BN noisy-AND dengan **inferensi eksak variable elimination** dan soft evidence BKT; readiness memakai probabilitas gabungan semua prasyarat. Graf menolak siklus.
 - Rekomendasi deterministik, diagnosis remedial, mode kontrol urutan tetap, serta log input, snapshot graf/latihan, dan versi model.

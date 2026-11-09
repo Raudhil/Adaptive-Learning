@@ -4,7 +4,9 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { hash } from "bcryptjs";
+import { mkdir,writeFile } from "node:fs/promises";
 import { db,closeDB } from "../src/lib/db";
+import { verifyUI } from "./verify-ui";
 import { pretestQuestions,defaultConfig } from "../src/lib/seed-data";
 const origin="http://localhost:3107";
 const password=randomBytes(20).toString("hex");
@@ -15,9 +17,12 @@ process.env.ALLOW_LOCAL_DB="true";
 process.env.APP_URL=origin;
 process.env.RESEARCH_SECRET=randomBytes(32).toString("hex");
 const cookies:Record<string,string>={};
+const timings:{endpoint:string;ms:number}[]=[];
 let server:ReturnType<typeof spawn>|undefined;
 async function call(role:string,endpoint:string,method="GET",input?:unknown,expected=200){
+ const started=performance.now();
  const response=await fetch(origin+"/api/"+endpoint,{method,headers:{"Content-Type":"application/json",Origin:origin,"X-CSRF-Protection":"1",Cookie:cookies[role]??""},body:input===undefined?undefined:JSON.stringify(input)});
+ if(response.ok&&["pretest","attempts","recommendation"].includes(endpoint))timings.push({endpoint,ms:Math.round(performance.now()-started)});
  const cookie=response.headers.get("set-cookie");if(cookie)cookies[role]=cookie.split(";")[0];
  const payload=await response.text();assert.equal(response.status,expected,`${method} ${endpoint}: ${payload.slice(0,300)}`);
  return response.headers.get("content-type")?.includes("application/json")?JSON.parse(payload):payload;
@@ -77,9 +82,9 @@ async function main(){
  await call("student","model-params","GET",undefined,403);
  const course=await call("lecturer","classes","POST",{name:"Kelas Uji Adaptif",mode:"adaptive"},201);
  await call("student","classes/join","POST",{code:course.join_code});
- await call("student","pretest","POST",{answers:Object.fromEntries(pretestQuestions.map(q=>[q.id,q.answer])),times:[10,10,10,10],experience:3,prerequisite:null});
- await call("student","pretest","POST",{answers:Object.fromEntries(pretestQuestions.map(q=>[q.id,q.answer])),times:[10,10,10,10],experience:3,prerequisite:null},409);
- const mastery=await call("student","mastery");assert.equal(mastery.states.length,20);
+ await call("student","pretest","POST",{answers:Object.fromEntries(pretestQuestions.map(q=>[q.id,q.answer])),times:[10,10,10],experience:3,prerequisite:null});
+ await call("student","pretest","POST",{answers:Object.fromEntries(pretestQuestions.map(q=>[q.id,q.answer])),times:[10,10,10],experience:3,prerequisite:null},409);
+ const mastery=await call("student","mastery");assert.equal(mastery.states.length,25);
  const ex=(await call("student","exercises"))[0];
  const draft=await call("student",`drafts?exercise_id=${ex.id}`);assert.ok(draft.code);
  await call("student","drafts","PUT",{exercise_id:ex.id,code:ex.starter_code});
@@ -89,10 +94,10 @@ async function main(){
  const analytics=await call("lecturer",`classes/${course.id}/analytics`);assert.equal(analytics.students.length,1);assert.equal(analytics.students[0].attempts,2);
  await call("student",`classes/${course.id}/analytics`,"GET",undefined,403);
  await call("researcher","model-params","GET",undefined,403);
- await call("lecturer","kc","PUT",{id:"SMOKE",code:"SMOKE",name:"Konsep uji",module:"HTML",position:99,prerequisites:[{id:"H1",weight:.9}]});
-  await call("lecturer","kc","PUT",{id:"H1",code:"H1",name:"Struktur dokumen HTML",module:"HTML",position:0,prerequisites:[{id:"SMOKE",weight:.9}]},400);
+ await call("lecturer","kc","PUT",{id:"SMOKE",code:"SMOKE",name:"Konsep uji",module:"HTML",position:99,prerequisites:[{id:"H01",weight:.9}]});
+  await call("lecturer","kc","PUT",{id:"H01",code:"H01",name:"Struktur dokumen HTML",module:"HTML",position:0,prerequisites:[{id:"SMOKE",weight:.9}]},400);
  // Verify a rejected cycle is rolled back, preserving the original graph.
- const nodes=await call("lecturer","kc");assert.deepEqual(nodes.find((k:any)=>k.id==="H1").prerequisites,[]);
+ const nodes=await call("lecturer","kc");assert.deepEqual(nodes.find((k:any)=>k.id==="H01").prerequisites,[]);
  await call("lecturer","materials","PUT",{id:"smoke-material",kc_id:"SMOKE",type:"text",title:"Materi uji",content:"Contoh materi pengujian.",url:null});
  assert.ok((await call("student","materials")).some((m:any)=>m.id==="smoke-material"));
  await call("lecturer","materials","DELETE",{id:"smoke-material"});
@@ -100,15 +105,23 @@ async function main(){
  assert.ok((await call("student","exercises")).some((e:any)=>e.id==="smoke-exercise"));
  await call("lecturer","exercises","DELETE",{id:"smoke-exercise"});
  await call("lecturer","kc","DELETE",{id:"SMOKE"});
- await call("admin","model-params","PUT",{version:"smoke-v2",values:{...defaultConfig,masteryThreshold:.9}});
+ await call("admin","model-params","PUT",{version:"smoke-v2",values:defaultConfig});
  assert.equal((await call("admin","model-params")).active.version,"smoke-v2");
  const today=new Date().toISOString().slice(0,10),query=`export?class_id=${course.id}&from=${today}&to=${today}`;
  const csv=await call("researcher",query);assert.ok(csv.includes("participant"));assert.ok(!csv.includes("student@smoke.test"));assert.ok(!csv.includes("Mahasiswa Uji"));assert.ok(csv.split("\r\n").length>1);
  for(const kind of ["pretest","recommendations"]){const exportCsv=await call("researcher",query+"&kind="+kind);assert.ok(exportCsv.split("\r\n").length>1);assert.ok(!exportCsv.includes("student@smoke.test"));}
  await call("student","consent","PUT",{consent:false});assert.equal((await call("researcher",query)).split("\r\n").length,1);
- for(const [role,pages] of Object.entries({student:["/dashboard","/learn","/learn/H1","/exercise/ex-h1-1","/pretest"],lecturer:["/classes","/content"],admin:["/settings"],researcher:["/research"]}))for(const p of pages){const r=await fetch(origin+p,{headers:{Cookie:cookies[role]},redirect:"manual"});assert.equal(r.status,200,`${role} ${p}`);const html=await r.text();assert.ok(!html.includes('"digest":"'),`SSR error ${p}`);}
+ for(const [role,pages] of Object.entries({student:["/dashboard","/learn","/learn/H01","/exercise/simpus-h01-1-v1","/pretest"],lecturer:["/classes","/content"],admin:["/settings"],researcher:["/research"]}))for(const p of pages){const r=await fetch(origin+p,{headers:{Cookie:cookies[role]},redirect:"manual"});assert.equal(r.status,200,`${role} ${p}`);const html=await r.text();assert.ok(!html.includes('"digest":"'),`SSR error ${p}`);}
  const worker=await fetch(origin+"/sandbox-worker.js");assert.ok(worker.headers.get("content-security-policy")?.includes("connect-src 'none'"));
+ await call("browserStudent","auth/register","POST",{email:"browser@smoke.test",name:"Browser Fixture",password,role:"student",consent:false},201);
+ await call("browserStudent","classes/join","POST",{code:course.join_code});
+ await verifyUI(origin,cookies.browserStudent);
+ const pending=(await call("browserStudent","exercises")).find((e:any)=>e.kcs[0].id==="C07");
+ await call("browserStudent","attempts","POST",{exercise_id:pending.id,code:pending.starter_code,tests_result:[{id:"forged",passed:true}],selection:"manual"},409);
+ const catalog=await call("browserStudent","kc");
+ for(const kc of catalog){const response=await fetch(origin+"/learn/"+kc.id,{headers:{Cookie:cookies.browserStudent}});assert.equal(response.status,200);const html=await response.text();assert.ok(!html.includes('"digest":"'),kc.id);}
  await call("student","auth/logout","POST");await call("student","mastery","GET",undefined,401);
+ await mkdir("output/validation",{recursive:true});await writeFile("output/validation/kc25-http.json",JSON.stringify({timings,maxMs:Math.max(...timings.map(t=>t.ms))},null,2));
  console.log("HTTP smoke passed: student/lecturer registration, persisted-role login redirects, role validation, authentication/CSRF/RBAC, class, pretest, drafts, hints, attempts, BKT, analytics, DAG rollback, model version, consent-filtered export, SSR pages, worker CSP.");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{server?.kill();await closeDB();});

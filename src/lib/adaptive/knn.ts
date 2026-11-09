@@ -1,14 +1,15 @@
 import type { Level, TrainingRow, FallbackThresholds } from "../types";
 const labels: Level[] = ["pemula", "menengah", "mahir"];
-export const FEATURE_BOUNDS = [[0,1],[0,1],[0,1],[0,1],[0,1800],[0,1800],[0,1800],[0,1800],[1,5],[0,100]];
+import { FEATURE_BOUNDS, PRETEST_MODULES } from "../curriculum";
+export { FEATURE_BOUNDS };
 export function normalize(features: number[]) {
-  if (features.length !== FEATURE_BOUNDS.length || features.some(n => !Number.isFinite(n))) throw new Error("Vektor fitur harus berisi 10 angka valid.");
+  if (features.length !== FEATURE_BOUNDS.length || features.some(n => !Number.isFinite(n))) throw new Error("Vektor fitur harus berisi 8 angka valid.");
   return features.map((x,i) => Math.max(0, Math.min(1, (x - FEATURE_BOUNDS[i][0]) / (FEATURE_BOUNDS[i][1] - FEATURE_BOUNDS[i][0]))));
 }
 export function classify(features: number[], training: TrainingRow[], k: number, minTraining: number, thresholds:FallbackThresholds={intermediate:0.4,advanced:0.75}) {
   const input = normalize(features);
   if (training.length < Math.max(minTraining,k)) {
-    const score = features.slice(0,4).reduce((a,b)=>a+b,0)/4;
+    const score = features.slice(0,PRETEST_MODULES.length).reduce((a,b)=>a+b,0)/PRETEST_MODULES.length;
     return { label: (score < thresholds.intermediate ? "pemula" : score < thresholds.advanced ? "menengah" : "mahir") as Level, neighbors: [], method: "score-fallback" };
   }
   const neighbors = training.map(row => ({ id: row.id, label: row.label, distance: Math.sqrt(normalize(row.features).reduce((s,x,i)=>s+(x-input[i])**2,0)) }))
@@ -20,7 +21,7 @@ export function classify(features: number[], training: TrainingRow[], k: number,
 }
 /** Stratified deterministic CV. Bounds are fixed, never fitted on held-out students. */
 export function selectK(rows: TrainingRow[], candidates = [3,5,7], folds = 5) {
-  if (rows.length < 10 || labels.some(l => rows.filter(r=>r.label===l).length < 2)) throw new Error("CV memerlukan ≥10 siswa dan ≥2 contoh setiap label.");
+  if (rows.length < 10 || labels.some(l => rows.filter(r=>r.label===l).length < 2)) throw new Error("CV memerlukan â‰¥10 siswa dan â‰¥2 contoh setiap label.");
   const buckets: TrainingRow[][] = Array.from({length:folds},()=>[]);
   for (const label of labels) rows.filter(r=>r.label===label).sort((a,b)=>a.id.localeCompare(b.id)).forEach((r,i)=>buckets[i%folds].push(r));
   const reports = candidates.filter(k=>k%2===1 && k>0 && buckets.every(b=>rows.length-b.length>=k)).map(k=> {

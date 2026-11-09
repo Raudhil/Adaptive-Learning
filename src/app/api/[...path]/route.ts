@@ -10,6 +10,7 @@ import { validateDAG } from "@/lib/adaptive/bayes-net";
 import { selectK } from "@/lib/adaptive/knn";
 import { configSchema,kcSchema,exerciseSchema,materialSchema,codeSchema,trainingSchema } from "@/lib/validation";
 import { pretestQuestions } from "@/lib/seed-data";
+import { CURRICULUM_VERSION,PRETEST_INSTRUMENT_VERSION } from "@/lib/curriculum";
 import { pseudonym,toCSV } from "@/lib/export";
 import { roleHomePath } from "@/lib/roles";
 import { classAnalytics,studentDetail } from "@/lib/analytics";
@@ -49,8 +50,16 @@ async function handle(request:Request,context:Context) {
   if (route==="auth/logout"&&method==="POST") {await destroySession();return ok({next:"/login"});}
   const user=await requireUser();
   if (route==="me"&&method==="GET") {
-   const profile=user.role==="student"?(await db.query("SELECT knn_label,method,model_version,created_at,features->'scores' AS scores,instrument_version,audit->'dataset' AS dataset FROM pretest_results WHERE user_id=$1",[user.id])).rows[0]??null:null;
+   const profile=user.role==="student"?(await db.query("SELECT knn_label,method,model_version,created_at,features->'scores' AS scores,instrument_version,audit->'dataset' AS dataset FROM current_pretests WHERE user_id=$1",[user.id])).rows[0]??null:null;
    return ok({user,pretest:user.role==="student"?!!profile:null,profile});
+  }
+  if(route==="curriculum/history"&&method==="GET"){
+   await requireUser(["student"]);
+   const [pretests,states,attempts]=await Promise.all([
+    db.query("SELECT instrument_version,knn_label,created_at FROM pretest_results WHERE user_id=$1 AND instrument_version<>$2 ORDER BY created_at DESC",[user.id,PRETEST_INSTRUMENT_VERSION]),
+    db.query("SELECT m.*,k.code,k.name FROM mastery_states m JOIN knowledge_components k ON k.id=m.kc_id WHERE m.user_id=$1 AND k.curriculum_version<>$2 ORDER BY k.position",[user.id,CURRICULUM_VERSION]),
+    db.query("SELECT a.id,a.code,a.passed,a.created_at,e.title FROM attempts a JOIN exercises e ON e.id=a.exercise_id WHERE a.user_id=$1 AND e.curriculum_version<>$2 ORDER BY a.created_at DESC",[user.id,CURRICULUM_VERSION])
+   ]);return ok({pretests:pretests.rows,states:states.rows,attempts:attempts.rows});
   }
   if (route==="consent"&&method==="PUT") {
    const {consent}=z.object({consent:z.boolean()}).parse(await body(request));
@@ -61,7 +70,7 @@ async function handle(request:Request,context:Context) {
   }
   if (route==="pretest"&&method==="POST") {
    await requireUser(["student"]);
-   const input=z.object({answers:z.record(z.string(),z.number().int().min(0).max(3)),times:z.array(z.number().min(0).max(1800)).length(4),experience:z.number().int().min(1).max(5),prerequisite:z.number().min(0).max(100).nullable()}).parse(await body(request));
+   const input=z.object({answers:z.record(z.string(),z.number().int().min(0).max(3)),times:z.array(z.number().min(0).max(1800)).length(3),experience:z.number().int().min(1).max(5),prerequisite:z.number().min(0).max(100).nullable()}).parse(await body(request));
    return ok(await submitPretest(user.id,input.answers,input.times,input.experience,input.prerequisite));
   }
   if (route==="recommendation"&&method==="GET") {await requireUser(["student"]);return ok(await transaction(tx=>buildRecommendation(user.id,tx)));}
@@ -72,7 +81,7 @@ async function handle(request:Request,context:Context) {
   }
   if (route==="mastery"&&method==="GET") {
    await requireUser(["student"]);
-   const [{rows:states},{rows:history}]=await Promise.all([db.query("SELECT * FROM mastery_states WHERE user_id=$1",[user.id]),db.query("SELECT kc_id,p_before,p_after,created_at FROM mastery_log WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100",[user.id])]);
+   const [{rows:states},{rows:history}]=await Promise.all([db.query("SELECT m.*,k.assessment_ready FROM mastery_states m JOIN knowledge_components k ON k.id=m.kc_id WHERE m.user_id=$1 AND k.curriculum_version=$2",[user.id,CURRICULUM_VERSION]),db.query("SELECT l.kc_id,l.p_before,l.p_after,l.created_at FROM mastery_log l JOIN knowledge_components k ON k.id=l.kc_id WHERE l.user_id=$1 AND k.curriculum_version=$2 ORDER BY l.created_at DESC LIMIT 100",[user.id,CURRICULUM_VERSION])]);
    const {values}=await getConfig();
    return ok({states,history,masteryThreshold:values.masteryThreshold,readinessThreshold:values.readinessThreshold});
   }
@@ -154,11 +163,13 @@ async function handle(request:Request,context:Context) {
    return ok(await pilotDataset(kind,url.searchParams.get("class_id")||undefined));
   }
   if (["kc","exercises","materials"].includes(route)) {
-   if (method==="GET") return ok(route==="kc"?await getKCs():route==="exercises"?(await getExercises()).map(e=>user.role==="student"?{...e,hints:e.hints.map(()=>"Petunjuk tersedia melalui tombol hint.")}:e):(await db.query("SELECT * FROM materials ORDER BY kc_id,title")).rows);
+   if (method==="GET") return ok(route==="kc"?await getKCs():route==="exercises"?(await getExercises()).map(e=>user.role==="student"?{...e,hints:e.hints.map(()=>"Petunjuk tersedia melalui tombol hint.")}:e):(await db.query("SELECT m.* FROM materials m JOIN knowledge_components k ON k.id=m.kc_id WHERE k.curriculum_version=$1 ORDER BY m.kc_id,m.title",[CURRICULUM_VERSION])).rows);
    await requireUser(["lecturer","admin"]);
    if (method==="DELETE") {
     const {id:target}=z.object({id:z.string().min(1)}).parse(await body(request));
     const table={kc:"knowledge_components",exercises:"exercises",materials:"materials"}[route]!;
+    const archived=route==="materials"?(await db.query("SELECT k.curriculum_version FROM materials m JOIN knowledge_components k ON k.id=m.kc_id WHERE m.id=$1",[target])).rows[0]:(await db.query(`SELECT curriculum_version FROM ${table} WHERE id=$1`,[target])).rows[0];
+    if(archived&&archived.curriculum_version!==CURRICULUM_VERSION)throw new HttpError(409,"Konten arsip tidak dihapus; riwayat kurikulum lama dipertahankan.");
     await db.query(`DELETE FROM ${table} WHERE id=$1`,[target]);return ok({deleted:true});
    }
    if (["POST","PUT"].includes(method)) {
@@ -166,20 +177,33 @@ async function handle(request:Request,context:Context) {
     return ok(await transaction(async tx=> {
      if (route==="kc") {
       const k=kcSchema.parse(input),all=await getKCs(tx);
+      const old=(await tx.query("SELECT curriculum_version FROM knowledge_components WHERE id=$1",[k.id])).rows[0];
+      if(old&&old.curriculum_version!==CURRICULUM_VERSION)throw new HttpError(409,"KC historis tidak dapat ditimpa. Gunakan ID versi baru.");
       try { validateDAG([...all.filter(x=>x.id!==k.id),k]); } catch(error) { throw new HttpError(400,(error as Error).message); }
-      await tx.query("INSERT INTO knowledge_components(id,code,name,module,position) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET code=$2,name=$3,module=$4,position=$5",[k.id,k.code,k.name,k.module,k.position]);
+      await tx.query("INSERT INTO knowledge_components(id,code,name,module,position,curriculum_version) VALUES($1,$2,$3,$4,$5,'simpus-web-2026-v1') ON CONFLICT(id) DO UPDATE SET code=$2,name=$3,module=$4,position=$5",[k.id,k.code,k.name,k.module,k.position]);
+      await tx.query("UPDATE knowledge_components SET description=COALESCE($2,description),importance_weight=COALESCE($3,importance_weight),difficulty_level=COALESCE($4,difficulty_level) WHERE id=$1",[k.id,k.description??null,k.importance_weight??null,k.difficulty_level??null]);
       await tx.query("DELETE FROM kc_prerequisites WHERE kc_id=$1",[k.id]);
       for (const p of k.prerequisites) await tx.query("INSERT INTO kc_prerequisites(kc_id,prereq_kc_id,weight) VALUES($1,$2,$3)",[k.id,p.id,p.weight]);
       return k;
      }
      if (route==="exercises") {
       const e=exerciseSchema.parse(input);
-      await tx.query("INSERT INTO exercises(id,title,instructions,starter_code,difficulty,hints) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO UPDATE SET title=$2,instructions=$3,starter_code=$4,difficulty=$5,hints=$6",[e.id,e.title,e.instructions,json(e.starter_code),e.difficulty,json(e.hints)]);
+      const nodes=await getKCs(tx);
+      if(e.assessment_ready&&e.kcs.some(k=>nodes.some(n=>n.id===k.id&&n.assessment_ready===false)))throw new HttpError(409,"KC belum siap dinilai otomatis.");
+      if(e.kcs.some(k=>!nodes.some(n=>n.id===k.id)))throw new HttpError(400,"Latihan hanya boleh merujuk KC kurikulum aktif.");
+      if((await tx.query("SELECT id FROM attempts WHERE exercise_id=$1 LIMIT 1",[e.id])).rows.length)throw new HttpError(409,"Soal sudah memiliki riwayat. Buat ID/versi soal baru.");
+      const old=(await tx.query("SELECT curriculum_version FROM exercises WHERE id=$1",[e.id])).rows[0];
+      if(old&&old.curriculum_version!==CURRICULUM_VERSION)throw new HttpError(409,"Latihan historis tidak dapat ditimpa.");
+      await tx.query("INSERT INTO exercises(id,title,instructions,starter_code,difficulty,hints,curriculum_version) VALUES($1,$2,$3,$4,$5,$6,'simpus-web-2026-v1') ON CONFLICT(id) DO UPDATE SET title=$2,instructions=$3,starter_code=$4,difficulty=$5,hints=$6",[e.id,e.title,e.instructions,json(e.starter_code),e.difficulty,json(e.hints)]);
+      await tx.query("UPDATE exercises SET evaluator=$2,assessment_ready=$3,assessment_note=$4 WHERE id=$1",[e.id,e.evaluator,e.assessment_ready,e.assessment_note]);
       await tx.query("DELETE FROM exercise_kc WHERE exercise_id=$1",[e.id]);await tx.query("DELETE FROM test_cases WHERE exercise_id=$1",[e.id]);
       for (const k of e.kcs) await tx.query("INSERT INTO exercise_kc(exercise_id,kc_id,weight) VALUES($1,$2,$3)",[e.id,k.id,k.weight]);
       for (const t of e.tests) await tx.query("INSERT INTO test_cases(id,exercise_id,description,script,timeout_ms) VALUES($1,$2,$3,$4,$5)",[t.id,e.id,t.description,t.script,t.timeout_ms]);return e;
      }
      const m=materialSchema.parse(input);
+     if(!(await getKCs(tx)).some(k=>k.id===m.kc_id))throw new HttpError(409,"Materi harus merujuk KC kurikulum aktif.");
+     const oldMaterial=(await tx.query("SELECT k.curriculum_version FROM materials m JOIN knowledge_components k ON k.id=m.kc_id WHERE m.id=$1",[m.id])).rows[0];
+     if(oldMaterial&&oldMaterial.curriculum_version!==CURRICULUM_VERSION)throw new HttpError(409,"Materi arsip tidak dapat ditimpa.");
      await tx.query("INSERT INTO materials(id,kc_id,title,type,content,url) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO UPDATE SET kc_id=$2,title=$3,type=$4,content=$5,url=$6,updated_at=now()",[m.id,m.kc_id,m.title,m.type,m.content,m.url]);return m;
     }));
    }
@@ -214,13 +238,13 @@ async function handle(request:Request,context:Context) {
    if (kind!=="attempts") {
     const table=kind==="pretest"?"pretest_results":"recommendations";
     const {rows}=await db.query(`SELECT a.*,c.mode FROM ${table} a JOIN users u ON u.id=a.user_id JOIN enrollments e ON e.user_id=u.id JOIN classes c ON c.id=e.class_id WHERE u.consent_at IS NOT NULL AND a.created_at>=u.consent_at AND c.id=$1 AND a.created_at>=$2::date AND a.created_at<($3::date+interval '1 day') ORDER BY a.created_at`,[class_id,from,to]);
-    const headers=kind==="pretest"?["participant","class_id","mode","features","knn_label","neighbors","model_version","method","created_at"]:["participant","class_id","mode","kc_id","exercise_id","reason","inputs","accepted","created_at"];
-    const csv=toCSV(headers,rows.map(r=>[pseudonym(r.user_id,secret),class_id,r.mode,...(kind==="pretest"?[r.features,r.knn_label,r.neighbors.map((n:any)=>({...n,id:pseudonym("training:"+n.id,secret)})),r.model_version,r.method,r.created_at]:[r.kc_id,r.exercise_id,r.reason,r.inputs,r.accepted,r.created_at])]));
+    const headers=kind==="pretest"?["participant","class_id","mode","instrument_version","features","knn_label","neighbors","model_version","method","created_at"]:["participant","class_id","mode","kc_id","exercise_id","reason","inputs","accepted","created_at"];
+    const csv=toCSV(headers,rows.map(r=>[pseudonym(r.user_id,secret),class_id,r.mode,...(kind==="pretest"?[r.instrument_version,r.features,r.knn_label,r.neighbors.map((n:any)=>({...n,id:pseudonym("training:"+n.id,secret)})),r.model_version,r.method,r.created_at]:[r.kc_id,r.exercise_id,r.reason,r.inputs,r.accepted,r.created_at])]));
     return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="${kind}-penelitian.csv"`,"Cache-Control":"no-store"}});
    }
    const {rows}=await db.query("SELECT a.*,c.mode,m.kc_id,m.p_before,m.p_after,m.predicted_correct,m.observed_correct,COALESCE(m.param_version,a.context->>'param_version') AS param_version FROM attempts a JOIN users u ON u.id=a.user_id JOIN enrollments e ON e.user_id=u.id JOIN classes c ON c.id=e.class_id LEFT JOIN mastery_log m ON m.attempt_id=a.id WHERE u.consent_at IS NOT NULL AND a.created_at>=u.consent_at AND c.id=$1 AND a.created_at>=$2::date AND a.created_at<($3::date+interval '1 day') ORDER BY a.created_at,a.id,m.kc_id",[class_id,from,to]);
-   const headers=["participant","class_id","mode","exercise_id","kc_id","passed","is_first","hints_used","duration_ms","p_before","p_after","predicted_correct","observed_correct","param_version","created_at"];
-   const csv=toCSV(headers,rows.map(a=>[pseudonym(a.user_id,secret),class_id,a.mode,a.exercise_id,a.kc_id,a.passed,a.is_first,a.hints_used,a.duration_ms,a.p_before,a.p_after,a.predicted_correct,a.observed_correct,a.param_version,a.created_at]));
+   const headers=["participant","class_id","mode","exercise_id","curriculum_version","kc_id","passed","is_first","hints_used","duration_ms","p_before","p_after","predicted_correct","observed_correct","param_version","created_at"];
+   const csv=toCSV(headers,rows.map(a=>[pseudonym(a.user_id,secret),class_id,a.mode,a.exercise_id,a.context?.curriculum_version??"legacy-srs-v1",a.kc_id,a.passed,a.is_first,a.hints_used,a.duration_ms,a.p_before,a.p_after,a.predicted_correct,a.observed_correct,a.param_version,a.created_at]));
    return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="interaksi-penelitian.csv"',"Cache-Control":"no-store"}});
   }
   throw new HttpError(404,"Endpoint tidak ditemukan.");

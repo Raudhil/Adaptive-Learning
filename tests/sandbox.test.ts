@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Script, createContext } from "node:vm";
 import { buildSandbox } from "../src/lib/sandbox/runner";
-import { seedExercises } from "../src/lib/seed-data";
+import { seedExercises } from "../src/lib/legacy-seed-data";
 import { GET as workerResponse } from "../src/app/sandbox-worker.js/route";
 import type { Code, TestCase } from "../src/lib/types";
 
@@ -34,7 +34,8 @@ async function execute(code: Code, tests: TestCase[]) {
   parent: { postMessage: (message: typeof messages[number]) => { messages.push(message); if (message.type === "complete") complete(); } },
  });
  context.window = context;
- context.addEventListener = () => {};
+ context.addEventListener = (type:string,callback:()=>void) => {if(type==="load")setTimeout(callback,0);};
+ context.requestAnimationFrame = (callback:()=>void) => setTimeout(callback,0);
  for (const script of sandboxScripts(code, tests)) script.runInContext(context, { timeout: 1000 });
  await completed;
  return messages;
